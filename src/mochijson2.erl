@@ -402,8 +402,22 @@ tokenize_string(B, S=#decoder{offset=O}, Acc) ->
                 Acc1 = lists:reverse(xmerl_ucs:to_utf8(C), Acc),
                 tokenize_string(B, ?ADV_COL(S, 6), Acc1)
             end;
-        <<_:O/binary, C, _/binary>> ->
-            tokenize_string(B, ?INC_CHAR(S, C), [C | Acc])
+        <<_:O/binary, C1, _/binary>> when C1 < 128 ->
+            tokenize_string(B, ?INC_CHAR(S, C1), [C1 | Acc]);
+        <<_:O/binary, C1, C2, _/binary>> when C1 >= 194, C1 =< 223,
+                C2 >= 128, C2 =< 191 ->
+            tokenize_string(B, ?ADV_COL(S, 2), [C2, C1 | Acc]);
+        <<_:O/binary, C1, C2, C3, _/binary>> when C1 >= 224, C1 =< 239,
+                C2 >= 128, C2 =< 191,
+                C3 >= 128, C3 =< 191 ->
+            tokenize_string(B, ?ADV_COL(S, 3), [C3, C2, C1 | Acc]);
+        <<_:O/binary, C1, C2, C3, C4, _/binary>> when C1 >= 240, C1 =< 244,
+                C2 >= 128, C2 =< 191,
+                C3 >= 128, C3 =< 191,
+                C4 >= 128, C4 =< 191 ->
+            tokenize_string(B, ?ADV_COL(S, 4), [C4, C3, C2, C1 | Acc]);
+        _ ->
+            throw(invalid_utf8)
     end.
 
 tokenize_number(B, S) ->
@@ -598,21 +612,21 @@ e2j_test_vec(utf8) ->
      {[], "[]"},
      {[[]], "[[]]"},
      {[1, <<"foo">>], "[1,\"foo\"]"},
-
+     
      %% json array in a json object
      {obj_from_list([{<<"foo">>, [123]}]),
       "{\"foo\":[123]}"},
-
+     
      %% json object in a json object
      {obj_from_list([{<<"foo">>, obj_from_list([{<<"bar">>, true}])}]),
       "{\"foo\":{\"bar\":true}}"},
-
+     
      %% fold evaluation order
      {obj_from_list([{<<"foo">>, []},
                      {<<"bar">>, obj_from_list([{<<"baz">>, true}])},
                      {<<"alice">>, <<"bob">>}]),
       "{\"foo\":[],\"bar\":{\"baz\":true},\"alice\":\"bob\"}"},
-
+     
      %% json object in a json array
      {[-123, <<"foo">>, obj_from_list([{<<"bar">>, []}]), null],
       "[-123,\"foo\",{\"bar\":[]},null]"}
@@ -621,7 +635,7 @@ e2j_test_vec(utf8) ->
 %% test utf8 encoding
 encoder_utf8_test() ->
     %% safe conversion case (default)
-    [34,"\\u0001","\\u0442","\\u0435","\\u0441","\\u0442",34] =
+    [34,"\\u0001","\\u0442","\\u0435","\\u0441","\\u0442",34] = 
         encode(<<1,"\321\202\320\265\321\201\321\202">>),
 
     %% raw utf8 output (optional)
@@ -639,7 +653,7 @@ input_validation_test() ->
         Expect = list_to_binary(xmerl_ucs:to_utf8(CodePoint)),
         Expect = decode(UTF8)
     end, Good),
-
+    
     Bad = [
         %% 2nd, 3rd, or 4th byte of a multi-byte sequence w/o leading byte
         <<?Q, 16#80, ?Q>>,
@@ -648,7 +662,9 @@ input_validation_test() ->
         <<?Q, 16#E0, 16#80,16#7F, ?Q>>,
         <<?Q, 16#F0, 16#80, 16#80, 16#7F, ?Q>>,
         %% we don't support code points > 10FFFF per RFC 3629
-        <<?Q, 16#F5, 16#80, 16#80, 16#80, ?Q>>
+        <<?Q, 16#F5, 16#80, 16#80, 16#80, ?Q>>,
+        %% escape characters trigger a different code path
+        <<?Q, $\\, $\n, 16#80, ?Q>>
     ],
     lists:foreach(
       fun(X) ->
@@ -656,7 +672,7 @@ input_validation_test() ->
               %% could be {ucs,{bad_utf8_character_code}} or
               %%          {json_encode,{bad_char,_}}
               {'EXIT', _} = (catch encode(X))
-      end, Bad).
+    end, Bad).
 
 inline_json_test() ->
     ?assertEqual(<<"\"iodata iodata\"">>,
