@@ -667,15 +667,6 @@ range_parts(Body0, Ranges) ->
         end,
     {lists:foldr(F, [], Ranges), Size}.
 
-%% @spec accepted_encodings([encoding()]) -> [encoding()] | bad_accept_encoding_value
-%% @type encoding() = string().
-                  end,
-                  Ranges)
-    catch
-        _:_ ->
-            fail
-    end.
-
 %% @spec accepted_encodings([encoding()]) -> [encoding()] | error()
 %% @type encoding() -> string()
 %% @type error() -> bad_accept_encoding_value
