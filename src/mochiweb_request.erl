@@ -193,19 +193,19 @@ recv_body() ->
 recv_body(MaxBody) ->
     case erlang:get(?SAVE_BODY) of
         undefined ->
-    % we could use a sane constant for max chunk size
-    Body = stream_body(?MAX_RECV_BODY, fun
-        ({0, _ChunkedFooter}, {_LengthAcc, BinAcc}) ->
-            iolist_to_binary(lists:reverse(BinAcc));
-        ({Length, Bin}, {LengthAcc, BinAcc}) ->
-            NewLength = Length + LengthAcc,
-            if NewLength > MaxBody ->
-                exit({body_too_large, chunked});
-            true ->
-                {NewLength, [Bin | BinAcc]}
-            end
-        end, {0, []}, MaxBody),
-    put(?SAVE_BODY, Body),
+            % we could use a sane constant for max chunk size
+            Body = stream_body(?MAX_RECV_BODY, fun
+                ({0, _ChunkedFooter}, {_LengthAcc, BinAcc}) ->
+                    iolist_to_binary(lists:reverse(BinAcc));
+                ({Length, Bin}, {LengthAcc, BinAcc}) ->
+                    NewLength = Length + LengthAcc,
+                    if NewLength > MaxBody ->
+                        exit({body_too_large, chunked});
+                    true ->
+                        {NewLength, [Bin | BinAcc]}
+                    end
+                end, {0, []}, MaxBody),
+            put(?SAVE_BODY, Body),
             Body;
         Cached -> Cached
     end.
@@ -486,7 +486,7 @@ stream_unchunked_body(0, Fun, FunState) ->
     Fun({0, <<>>}, FunState);
 stream_unchunked_body(Length, Fun, FunState) when Length > 0 ->
     PktSize = case Length > ?RECBUF_SIZE of
-    true ->
+        true ->
             ?RECBUF_SIZE;
         false ->
             Length
@@ -669,16 +669,6 @@ range_parts(Body0, Ranges) ->
 
 %% @spec accepted_encodings([encoding()]) -> [encoding()] | bad_accept_encoding_value
 %% @type encoding() = string().
-                  end,
-                  Ranges)
-    catch
-        _:_ ->
-            fail
-    end.
-
-%% @spec accepted_encodings([encoding()]) -> [encoding()] | error()
-%% @type encoding() -> string()
-%% @type error() -> bad_accept_encoding_value
 %%
 %% @doc Returns a list of encodings accepted by a request. Encodings that are
 %%      not supported by the server will not be included in the return list.
@@ -707,7 +697,7 @@ accepted_encodings(SupportedEncodings) ->
             "";
         Value ->
             Value
-                  end,
+    end,
     case mochiweb_util:parse_qvalues(AcceptEncodingHeader) of
         invalid_qvalue_string ->
             bad_accept_encoding_value;

@@ -184,7 +184,7 @@ urlencode(Props) ->
     Pairs = lists:foldr(
               fun ({K, V}, Acc) ->
                       [quote_plus(K) ++ "=" ++ quote_plus(V) | Acc]
-                           end, [], Props),
+              end, [], Props),
     string:join(Pairs, "&").
 
 %% @spec parse_qs(string() | binary()) -> [{Key, Value}]
@@ -395,7 +395,7 @@ record_to_proplist(Record, Fields) ->
     record_to_proplist(Record, Fields, '__record').
 
 %% @spec record_to_proplist(Record, Fields, TypeKey) -> proplist()
-%% @doc Return a proplist of the given Record with each field in the 
+%% @doc Return a proplist of the given Record with each field in the
 %%      Fields list set as a key with the corresponding value in the Record.
 %%      TypeKey is the key that is used to store the record type
 %%      Fields should be obtained by calling record_info(fields, record_type)
@@ -413,11 +413,9 @@ shell_quote([C | Rest], Acc) when C =:= $\" orelse C =:= $\` orelse
 shell_quote([C | Rest], Acc) ->
     shell_quote(Rest, [C | Acc]).
 
-%% @spec parse_qvalues(string()) -> [qvalue()] | error()
-%% @type qvalue() -> {element(), q()}
-%% @type element() -> string()
-%% @type q() -> 0.0 .. 1.0
-%% @type error() -> invalid_qvalue_string
+%% @spec parse_qvalues(string()) -> [qvalue()] | invalid_qvalue_string
+%% @type qvalue() = {encoding(), float()}.
+%% @type encoding() = string().
 %%
 %% @doc Parses a list (given as a string) of elements with Q values associated
 %%      to them. Elements are separated by commas and each element is separated
@@ -466,11 +464,8 @@ parse_qvalues(QValuesStr) ->
             invalid_qvalue_string
     end.
 
-%% @spec pick_accepted_encodings(qvalues(), [encoding()], encoding()) ->
+%% @spec pick_accepted_encodings([qvalue()], [encoding()], encoding()) ->
 %%    [encoding()]
-%% @type qvalues() -> [ {encoding(), q()} ]
-%% @type encoding() -> string()
-%% @type q() -> 0.0 .. 1.0
 %%
 %% @doc Determines which encodings specified in the given Q values list are
 %%      valid according to a list of supported encodings and a default encoding.
@@ -543,26 +538,54 @@ pick_accepted_encodings(AcceptedEncs, SupportedEncs, DefaultEnc) ->
     [E || E <- Accepted2, lists:member(E, SupportedEncs),
         not lists:member(E, Refused1)].
 
-test() ->
-    test_join(),
-    test_quote_plus(),
-    test_unquote(),
-    test_urlencode(),
-    test_parse_qs(),
-    test_urlsplit_path(),
-    test_urlunsplit_path(),
-    test_urlsplit(),
-    test_urlunsplit(),
-    test_path_split(),
-    test_guess_mime(),
-    test_parse_header(),
-    test_shell_quote(),
-    test_cmd(),
-    test_cmd_string(),
-    test_partition(),
-    test_safe_relative_path(),
-    test_parse_qvalues(),
-    test_pick_accepted_encodings(),
+make_io(Atom) when is_atom(Atom) ->
+    atom_to_list(Atom);
+make_io(Integer) when is_integer(Integer) ->
+    integer_to_list(Integer);
+make_io(Io) when is_list(Io); is_binary(Io) ->
+    Io.
+
+%%
+%% Tests
+%%
+-include_lib("eunit/include/eunit.hrl").
+-ifdef(TEST).
+
+make_io_test() ->
+    ?assertEqual(
+       <<"atom">>,
+       iolist_to_binary(make_io(atom))),
+    ?assertEqual(
+       <<"20">>,
+       iolist_to_binary(make_io(20))),
+    ?assertEqual(
+       <<"list">>,
+       iolist_to_binary(make_io("list"))),
+    ?assertEqual(
+       <<"binary">>,
+       iolist_to_binary(make_io(<<"binary">>))),
+    ok.
+
+-record(test_record, {field1=f1, field2=f2}).
+record_to_proplist_test() ->
+    ?assertEqual(
+       [{'__record', test_record},
+        {field1, f1},
+        {field2, f2}],
+       record_to_proplist(#test_record{}, record_info(fields, test_record))),
+    ?assertEqual(
+       [{'typekey', test_record},
+        {field1, f1},
+        {field2, f2}],
+       record_to_proplist(#test_record{},
+                          record_info(fields, test_record),
+                          typekey)),
+    ok.
+
+shell_quote_test() ->
+    ?assertEqual(
+       "\"foo \\$bar\\\"\\`' baz\"",
+       shell_quote("foo $bar\"`' baz")),
     ok.
 
 cmd_port_test_spool(Port, Acc) ->
@@ -764,7 +787,7 @@ safe_relative_path_test() ->
     undefined = safe_relative_path("foo//"),
     ok.
 
-test_parse_qvalues() ->
+parse_qvalues_test() ->
     [] = parse_qvalues(""),
     [{"identity", 0.0}] = parse_qvalues("identity;q=0"),
     [{"identity", 0.0}] = parse_qvalues("identity ;q=0"),
@@ -806,7 +829,7 @@ test_parse_qvalues() ->
     invalid_qvalue_string = parse_qvalues("gzip; q=0.1234, deflate"),
     ok.
 
-test_pick_accepted_encodings() ->
+pick_accepted_encodings_test() ->
     ["identity"] = pick_accepted_encodings(
         [],
         ["gzip", "identity"],
@@ -913,3 +936,5 @@ test_pick_accepted_encodings() ->
         "identity"
     ),
     ok.
+
+-endif.
