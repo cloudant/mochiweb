@@ -69,7 +69,14 @@ new_request({Socket, {Method, '*'=Uri, Version}, Headers}) ->
                          Method,
                          Uri,
                          Version,
-                         mochiweb_headers:make(Headers)).
+                         mochiweb_headers:make(Headers));
+
+%% Most likely a malformed request URI
+new_request({Socket, {_, _, _}, _}) ->
+    Req = mochiweb_request:new(Socket, 'GET', {abs_path, "/"}, {0,9}, []),
+    Req:respond({400, [], []}),
+    mochiweb_socket:close(Socket),
+    exit(normal).
 
 %% @spec new_response({Request, integer(), Headers}) -> MochiWebResponse
 %% @doc Return a mochiweb_response data structure.
